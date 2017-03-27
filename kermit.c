@@ -1,8 +1,8 @@
 #define KERMIT_C
 /*
   Embedded Kermit protocol module
-  Version: 1.6
-  Most Recent Update: Wed Mar 30 12:39:11 2011
+  Version: 1.7
+  Most Recent Update: Mon Jun  6 15:36:26 2011
 
   No stdio or other runtime library calls, no system calls, no system 
   includes, no static data, and no global variables in this module.
@@ -98,7 +98,6 @@ kermit(short f,				/* Function code */
 
     int i, j, rc;			/* Workers */
     int datalen;                        /* Length of packet data field */
-    int bctu;				/* Block check type for this packet */
     UCHAR *p;                           /* Pointer to packet data field */
     UCHAR *q;                           /* Pointer to data to be checked */
     UCHAR *s;				/* Worker string pointer */
@@ -313,7 +312,8 @@ kermit(short f,				/* Function code */
         }
 	debug(DB_MSG,"HDR CHKSUM OK",0,0);
         p[2] = c;                       /* Put checksum back */
-        datalen = xunchar(p[0])*95 + xunchar(p[1]) - k->bct; /* Data length */
+	/* Data length */
+        datalen = xunchar(p[0])*95 + xunchar(p[1]) - ((k->bctf) ? 3 : k->bct);
         p += 3;                         /* Fix data pointer */
         k->ipktinfo[r_slot].dat = p;	/* Permanent record of data pointer */
     } else {                            /* Regular packet */
@@ -323,11 +323,19 @@ kermit(short f,				/* Function code */
     }
 #endif /* F_LP */
 #ifdef F_CRC
-    if (t == 'S' || k->state == S_INIT) { /* S-packet was retransmitted? */
-        chklen = 1;                     /* Block check is always type 1 */
-        datalen = k->ipktinfo[r_slot].len - 3; /* Data length */
+    if (k->bctf) {			/* FORCE 3 */
+	chklen = 3;
     } else {
-	chklen = k->bct;
+	if (t == 'S' || k->state == S_INIT) { /* S-packet was retransmitted? */
+	    if (q[10] == '5') {		/* Block check type requested is 5 */
+		k->bctf = 1;		/* FORCE 3 */
+		chklen = 3;
+	    }
+	    chklen = 1;			/* Block check is always type 1 */
+	    datalen = k->ipktinfo[r_slot].len - 3; /* Data length */
+	} else {
+	    chklen = k->bct;
+	}
     }
 #else
     chklen = 1;				/* Block check is always type 1 */
@@ -1031,6 +1039,7 @@ spar(struct k_data * k, UCHAR *s, int datalen) {
         if ((k->bct < 1) || (k->bct > 3))
 #endif /* F_CRC */
 	  k->bct = 1;
+	if (k->bctf) k->bct = 3;
     }
     if (datalen >= 9) {                 /* Repeat counts */
         if ((s[9] > 32 && s[9] < 63) || (s[9] > 95 && s[9] < 127)) {
@@ -1120,7 +1129,10 @@ rpar(struct k_data * k, char type) {
       d[ 6] = k->ebq = '&';           /* I need to request it */
     else                                /* else just agree with other Kermit */
       d[ 6] = k->ebq;
-    d[ 7] = k->bct + '0';               /* Block check type */
+    if (k->bctf)			/* Block check type */
+      d[7] = '5';			/* FORCE 3 */
+    else
+      d[7] = k->bct + '0';		/* Normal */
     d[ 8] = k->rptq;			/* Repeat prefix */
     d[ 9] = tochar(k->capas);           /* Capability bits */
     d[10] = tochar(k->window);          /* Window size */
@@ -1136,8 +1148,10 @@ rpar(struct k_data * k, char type) {
 #endif /* F_LP */
 
 #ifdef F_CRC
-    b = k->bct;
-    k->bct = 1;                         /* Always use block check type 1 */
+    if (!(k->bctf)) {			/* Unless FORCE 3 */
+	b = k->bct;
+	k->bct = 1;			/* Always use block check type 1 */
+    }
 #endif /* F_CRC */
     switch (type) {
       case 'Y':				/* This is an ACK for packet 0 */
@@ -1150,7 +1164,9 @@ rpar(struct k_data * k, char type) {
 	rc = -1;
     }
 #ifdef F_CRC
-    k->bct = b;
+    if (!(k->bctf)) {			/* Unless FORCE 3 */
+	k->bct = b;
+    }
 #endif /* F_CRC */
     return(rc);                         /* Pass along return code. */
 }
@@ -1510,7 +1526,9 @@ sdata(struct k_data *k,struct k_response *r) { /* Send a data packet */
 
 STATIC void
 epkt(char * msg, struct k_data * k) {
-    k->bct = 1;
+    if (!(k->bctf)) {			/* Unless FORCE 3 */
+	k->bct = 1;
+    }
     (void) spkt('E', 0, -1, (UCHAR *) msg, k);
 }
 

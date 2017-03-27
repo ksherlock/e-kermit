@@ -1,7 +1,7 @@
 #ifndef __KERMIT_H__
 #define __KERMIT_H__
 
-#define VERSION "1.6"			/* Kermit module version number */
+#define VERSION "1.7"			/* Kermit module version number */
 
 /*
   kermit.h -- Symbol and struct definitions for embedded Kermit.
@@ -388,6 +388,7 @@ struct k_data {                         /* The Kermit data structure */
     int zincnt;				/* Input buffer position */
     int zinlen;				/* Length of input file buffer */
     UCHAR * zinptr;			/* Pointer to input file buffer */
+    int bctf;				/* Flag to force type 3 block check */
     int dummy;
 };
 

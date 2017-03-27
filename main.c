@@ -124,7 +124,7 @@ usage() {
 #endif /* RECVONLY */
     fprintf(stderr," -p [neoms]   Parity: none, even, odd, mark, space\n");
 #ifdef F_CRC
-    fprintf(stderr," -b [123]     Block check type: 1, 2, or 3\n");
+    fprintf(stderr," -b [1235]    Block check type: 1, 2, 3, or 5\n");
 #endif /* F_CRC */
     fprintf(stderr," -k           Keep incompletely received files\n");
     fprintf(stderr," -B           Force binary mode\n");
@@ -219,7 +219,7 @@ doarg(char c) {				/* Command-line option parser */
 	    }
 	    if (c == 'b') {
 		check = atoi(*xargv);
-		if (check < 1 || check > 3)
+		if (check < 1 || check > 5 || check == 4)
 		  fatal("Invalid block check",(char *)0,(char *)0);
 #ifdef DEBUG
 	    } else if (c == 'E') {
@@ -338,7 +338,7 @@ main(int argc, char ** argv) {
     k.remote = remote;			/* Remote vs local */
     k.binary = ftype;			/* 0 = text, 1 = binary */
     k.parity = parity;                  /* Communications parity */
-    k.bct = check;			/* Block check type */
+    k.bct = (check == 5) ? 3 : check;	/* Block check type */
     k.ikeep = keep;			/* Keep incompletely received files */
     k.filelist = cmlist;		/* List of files to send (if any) */
     k.cancel = 0;			/* Not canceled yet */
@@ -367,6 +367,8 @@ main(int argc, char ** argv) {
 #else
     k.dbf    = 0;
 #endif /* DEBUG */
+    /* Force Type 3 Block Check (16-bit CRC) on all packets, or not */
+    k.bctf   = (check == 5) ? 1 : 0;
 
 /* Initialize Kermit protocol */
 
